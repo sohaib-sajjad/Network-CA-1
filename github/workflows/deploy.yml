@@ -9,7 +9,7 @@ on:
 env:
   AWS_REGION: eu-north-1  
   ECR_REPOSITORY: networks-ca1
-  CF_STACK_NAME: docker-app-stack
+  CF_STACK_NAME: stack-for-networks-ca1
 
 jobs:
   build-and-push:

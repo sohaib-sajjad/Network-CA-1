@@ -68,14 +68,11 @@ jobs:
     - name: Deploy CloudFormation Stack
       run: |
         aws cloudformation deploy \
-          --template-file cloudformation-template.yaml \
+          --template-file "AWS cloudformation template.yml" \
           --stack-name ${{ env.CF_STACK_NAME }} \
           --parameter-overrides \
             ECRRepoName=${{ env.ECR_REPOSITORY }} \
             InstanceType=t3.micro \
-            KeyName=your-key-pair-name \
-            VPC=vpc-xxxxxxxxx \
-            Subnet=subnet-xxxxxxxxx \
           --capabilities CAPABILITY_IAM
 
     - name: Get Application URL

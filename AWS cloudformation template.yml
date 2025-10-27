@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploy Docker app on EC2 via CloudFormation
+
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: KeyPair for SSH access (optional)
+
+  ECRRepoName:
+    Type: String
+    Default: networks-ca1
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+
+  VPC:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to launch into (use your default VPC)
+
+  Subnet:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet in that VPC (a default subnet is fine)
+
+  LatestAmiId:   # <-- move here (Parameters), not Resources
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+Resources:
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [ !Ref InstanceRole ]
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP inbound
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp: 0.0.0.0/0
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref InstanceProfile
+      ImageId: !Ref LatestAmiId
+      SubnetId: !Ref Subnet
+      SecurityGroupIds: [ !Ref SecurityGroup ]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -eux
+          yum update -y
+          yum install -y docker jq aws-cli
+          systemctl enable --now docker
+
+          REGION=${AWS::Region}
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          REPO_NAME=${ECRRepoName}
+
+          aws ecr get-login-password --region $REGION \
+            | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+
+          docker pull $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:latest
+          docker run -d --restart=always -p 80:3000 $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:latest
+      Tags:
+        - Key: Name
+          Value: CloudFormationDemo
+
+Outputs:
+  PublicDNS:
+    Description: EC2 Public DNS
+    Value: !GetAtt EC2Instance.PublicDnsName

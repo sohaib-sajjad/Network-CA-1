@@ -75,6 +75,8 @@ Resources:
           #!/bin/bash
           set -eux
           exec > /var/log/user-data.log 2>&1
+          #This makes user-data re-run on every boot
+          rm -f /var/lib/cloud/instances/*/sem/config_scripts_user
           
           echo "Starting user data script..."
           yum update -y

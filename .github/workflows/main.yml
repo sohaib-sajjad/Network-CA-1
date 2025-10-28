@@ -105,21 +105,7 @@ jobs:
         
         # Wait a bit more for SSM Agent to start
         echo "Waiting for SSM Agent to initialize..."
-        sleep 10
-        
-        # Check if instance is ready for SSM commands
-        for i in {1..10}; do
-          echo "Attempt $i: Checking SSM connection..."
-          if aws ssm describe-instance-information \
-            --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
-            --query 'InstanceInformationList[0].PingStatus' \
-            --output text | grep -q "Online"; then
-            echo "✅ SSM Agent is online and ready"
-            break
-          else
-            echo "SSM Agent not ready yet, waiting 15 seconds..."
-            sleep 15
-          fi
+        sleep 10        
         done
 
     - name: Deploy Container to EC2

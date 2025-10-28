@@ -70,23 +70,35 @@ Resources:
       ImageId: !Ref LatestAmiId
       SubnetId: !Ref Subnet
       SecurityGroupIds: [ !Ref SecurityGroup ]
-      UserData:
+
+ UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           set -eux
-          yum update -y
-          yum install -y docker jq aws-cli
-          systemctl enable --now docker
-
-          REGION=${AWS::Region}
+          exec > /var/log/user-data.log 2>&1
+          
+          echo "Starting deployment..."
+          
+          # Install and start Docker
+          sudo yum update -y
+          sudo yum install -y docker
+          sudo systemctl enable --now docker
+          
+          # Configure AWS
+          sudo yum install -y aws-cli
+          aws configure set region ${AWS::Region}
+          
+          # ECR login and deploy
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          REPO_NAME=${ECRRepoName}
-
-          aws ecr get-login-password --region $REGION \
-            | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
-
-          docker pull $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:latest
-          docker run -d --restart=always -p 80:3000 $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME:latest
+          aws ecr get-login-password --region ${AWS::Region} | sudo docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.${AWS::Region}.amazonaws.com
+          
+          # Stop old container, pull and run new one
+          sudo docker stop myapp 2>/dev/null || true
+          sudo docker rm myapp 2>/dev/null || true
+          sudo docker pull $ACCOUNT_ID.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepoName}:latest
+          sudo docker run -d --name myapp -p 80:3000 $ACCOUNT_ID.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepoName}:latest
+          
+          echo "Deployment completed successfully!"
       Tags:
         - Key: Name
           Value: CloudFormationDemo

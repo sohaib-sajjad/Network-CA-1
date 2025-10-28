@@ -95,3 +95,6 @@ Outputs:
   PublicDNS:
     Description: EC2 Public DNS
     Value: !GetAtt EC2Instance.PublicDnsName
+  InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref EC2Instance

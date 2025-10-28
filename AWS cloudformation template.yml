@@ -88,6 +88,11 @@ Resources:
           systemctl enable docker
           systemctl start docker
 
+          # Start and enable SSM Agent
+          systemctl enable amazon-ssm-agent
+          systemctl start amazon-ssm-agent
+    
+          echo "User-data script completed - Docker and SSM Agent are ready"
       Tags:
         - Key: Name
           Value: CloudFormationDemo

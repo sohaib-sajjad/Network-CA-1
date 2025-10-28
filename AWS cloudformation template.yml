@@ -123,7 +123,7 @@ Resources:
           docker ps
       Tags:
         - Key: Name
-          Value: My EC2
+          Value: MyEC2
 Outputs:
   PublicDNS:
     Description: EC2 Public DNS

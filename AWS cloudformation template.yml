@@ -125,7 +125,7 @@ Resources:
         - Key: Name
           Value: CloudFormationDemo
         - Key: Deployment
-          Value: v9   # Increment to force replacement
+          Value: v4   # Increment to force replacement
 
 
 Outputs:

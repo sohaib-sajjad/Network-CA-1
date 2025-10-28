@@ -58,7 +58,7 @@ jobs:
     - name: Deploy CloudFormation
       run: |
         aws cloudformation deploy \
-          --template-file cloudformation.yml \
+          --template-file AWS cloudformation template.yml \
           --stack-name ${{ env.CF_STACK_NAME }} \
           --parameter-overrides \
             ECRRepoName=${{ env.ECR_REPOSITORY }} \

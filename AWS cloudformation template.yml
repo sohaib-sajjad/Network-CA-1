@@ -22,7 +22,7 @@ Parameters:
     Type: AWS::EC2::Subnet::Id
     Description: Public subnet in that VPC (a default subnet is fine)
 
-  LatestAmiId:   # <-- move here (Parameters), not Resources
+  LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
@@ -39,6 +39,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore  # Added this to allow SSM access
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -96,6 +97,7 @@ Resources:
       Tags:
         - Key: Name
           Value: CloudFormationDemo
+
 Outputs:
   PublicDNS:
     Description: EC2 Public DNS

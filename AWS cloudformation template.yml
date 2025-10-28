@@ -124,6 +124,9 @@ Resources:
       Tags:
         - Key: Name
           Value: CloudFormationDemo
+        - Key: Deployment
+          Value: v2   # Increment to force replacement
+
 
 Outputs:
   PublicDNS:

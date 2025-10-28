@@ -77,9 +77,10 @@ jobs:
           --stack-name ${{ env.CF_STACK_NAME }} \
           --query 'Stacks[0].Outputs[?OutputKey==`InstanceId`].OutputValue' \
           --output text)
-        echo "public_dns=$PUBLIC_DNS" >> $GITHUB_OUTPUT
-        echo "instance_id=$INSTANCE_ID" >> $GITHUB_OUTPUT
+        echo "public_dns=$PUBLIC_DNS" >> $GITHUB_ENV
+        echo "instance_id=$INSTANCE_ID" >> $GITHUB_ENV
         echo "::notice title=Application URL::http://$PUBLIC_DNS"
+
 
   deploy-container:
     runs-on: ubuntu-latest
@@ -95,8 +96,9 @@ jobs:
 
     - name: Deploy Container
       run: |
-        INSTANCE_ID="${{ needs.deploy-infrastructure.outputs.instance_id }}"
-        PUBLIC_DNS="${{ needs.deploy-infrastructure.outputs.public_dns }}"
+
+        INSTANCE_ID="${{ env.instance_id }}"
+        PUBLIC_DNS="${{ env.public_dns }}"
         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
         echo "Deploying to instance: $INSTANCE_ID"

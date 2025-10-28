@@ -106,7 +106,7 @@ jobs:
         # Wait a bit more for SSM Agent to start
         echo "Waiting for SSM Agent to initialize..."
         sleep 10        
-        done
+        
 
     - name: Deploy Container to EC2
       run: |

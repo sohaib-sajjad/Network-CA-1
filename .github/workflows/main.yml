@@ -1,4 +1,5 @@
 name: Build and Deploy to AWS
+
 on:
   push:
     branches: [ main ]
@@ -58,7 +59,7 @@ jobs:
     - name: Deploy CloudFormation
       run: |
         aws cloudformation deploy \
-          --template-file AWS cloudformation template.yml \
+          --template-file "AWS cloudformation template.yml" \
           --stack-name ${{ env.CF_STACK_NAME }} \
           --parameter-overrides \
             ECRRepoName=${{ env.ECR_REPOSITORY }} \

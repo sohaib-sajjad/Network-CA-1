@@ -4,7 +4,7 @@ const PORT = 3000;
 
 app.get('/', (req, res) => {
   res.json({
-    message: 'Hello from Docker container deployed via CloudFormation + GitHub Actions!',
+    message: 'Hello from Sohaib Sajjad, Docker container deployed via CloudFormation + GitHub Actions!',
     timestamp: new Date().toISOString(),
     status: 'OK'
   });

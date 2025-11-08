@@ -1,0 +1,174 @@
+name: Build and Deploy to AWS
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: eu-north-1  
+  ECR_REPOSITORY: networks-ca1
+  CF_STACK_NAME: stack-for-networks-ca1
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - uses: aws-actions/amazon-ecr-login@v2
+      id: login-ecr
+
+    - run: aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }}
+
+    - name: Build and Push Docker Image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: latest
+      run: |
+        docker build -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG
+
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+
+    outputs:
+      instance_id: ${{ steps.instance-info.outputs.instance_id }}
+      public_dns: ${{ steps.instance-info.outputs.public_dns }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Deploy CloudFormation
+      run: |
+        aws cloudformation deploy \
+          --template-file "AWS cloudformation template.yml" \
+          --stack-name ${{ env.CF_STACK_NAME }} \
+          --parameter-overrides \
+            ECRRepoName=${{ env.ECR_REPOSITORY }} \
+            InstanceType=t3.micro \
+          --capabilities CAPABILITY_IAM
+
+    - name: Get Instance Information
+      id: instance-info
+      run: |
+        PUBLIC_DNS=$(aws cloudformation describe-stacks \
+          --stack-name ${{ env.CF_STACK_NAME }} \
+          --query 'Stacks[0].Outputs[?OutputKey==`PublicDNS`].OutputValue' \
+          --output text)
+        INSTANCE_ID=$(aws cloudformation describe-stacks \
+          --stack-name ${{ env.CF_STACK_NAME }} \
+          --query 'Stacks[0].Outputs[?OutputKey==`InstanceId`].OutputValue' \
+          --output text)
+        echo "public_dns=$PUBLIC_DNS" >> $GITHUB_OUTPUT
+        echo "instance_id=$INSTANCE_ID" >> $GITHUB_OUTPUT
+        echo "::notice title=Application URL::http://$PUBLIC_DNS"
+
+  deploy-container:
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-infrastructure]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Wait for instance to be ready
+      run: |
+        INSTANCE_ID="${{ needs.deploy-infrastructure.outputs.instance_id }}"
+        echo "Waiting for instance $INSTANCE_ID to be ready..."
+        
+        # Wait for instance to be in running state
+        aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"
+        echo "Instance is running"
+        
+        # Wait a bit more for SSM Agent to start
+        echo "Waiting for SSM Agent to initialize..."
+        sleep 10        
+        
+
+    - name: Deploy Container to EC2
+      run: |
+        INSTANCE_ID="${{ needs.deploy-infrastructure.outputs.instance_id }}"
+        PUBLIC_DNS="${{ needs.deploy-infrastructure.outputs.public_dns }}"
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        
+        echo "Deploying to instance: $INSTANCE_ID"
+        
+        # Use AWS SSM to run commands on the EC2 instance
+        aws ssm send-command \
+          --instance-ids "$INSTANCE_ID" \
+          --document-name "AWS-RunShellScript" \
+          --parameters "commands=[
+            'set -eux',
+            'echo \"Starting container deployment...\"',
+            'sudo yum update -y || true',
+            'sudo yum install -y aws-cli || true',
+            'aws configure set region ${{ env.AWS_REGION }}',
+            'aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com',
+            'sudo docker stop myapp2 || true',
+            'sudo docker rm myapp2 || true',
+            'sudo docker pull $ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:latest',
+            'sudo docker run -d --name myapp2 --restart=always -p 80:3000 $ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:latest',
+            'echo \"Container deployment completed\"',
+            'sudo docker ps'
+          ]" \
+          --output text
+        
+        echo "Container deployment command sent to EC2 instance"
+
+    - name: Wait for deployment and verify
+      run: |
+        INSTANCE_ID="${{ needs.deploy-infrastructure.outputs.instance_id }}"
+        PUBLIC_DNS="${{ needs.deploy-infrastructure.outputs.public_dns }}"
+        
+        # Wait for command to complete
+        echo "Waiting for deployment to complete..."
+        sleep 45
+        
+        # Check command status
+        echo "Checking deployment status..."
+        aws ssm list-commands \
+          --instance-id "$INSTANCE_ID" \
+          --query 'Commands[0].{Status:Status,OutputS3BucketName:OutputS3BucketName}' \
+          --output table
+
+    - name: Verify Deployment
+      run: |
+        PUBLIC_DNS="${{ needs.deploy-infrastructure.outputs.public_dns }}"
+        echo "Testing application at: http://$PUBLIC_DNS"
+        
+        # Test the application with retries
+        for i in {1..10}; do
+          echo "Attempt $i: Testing application..."
+          if curl -f "http://$PUBLIC_DNS" --connect-timeout 10 --max-time 10; then
+            echo "✅ Application deployed successfully!"
+            exit 0
+          else
+            echo "❌ Attempt $i failed, retrying in 10 seconds..."
+            sleep 10
+          fi
+        done
+        echo "❌ All deployment verification attempts failed"
+        exit 1

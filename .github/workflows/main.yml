@@ -105,7 +105,7 @@ jobs:
         
         # Wait a bit more for SSM Agent to start
         echo "Waiting for SSM Agent to initialize..."
-        sleep 10        
+        sleep 5        
         
 
     - name: Deploy Container to EC2
@@ -145,7 +145,7 @@ jobs:
         
         # Wait for command to complete
         echo "Waiting for deployment to complete..."
-        sleep 10
+        sleep 5
         
         # Check command status
         echo "Checking deployment status..."
@@ -167,7 +167,7 @@ jobs:
             exit 0
           else
             echo "Attempt $i failed, retrying in 10 seconds..."
-            sleep 10
+            sleep 5
           fi
         done
         echo "All deployment verification attempts failed"

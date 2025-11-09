@@ -163,12 +163,12 @@ jobs:
         for i in {1..10}; do
           echo "Attempt $i: Testing application..."
           if curl -f "http://$PUBLIC_DNS" --connect-timeout 10 --max-time 10; then
-            echo "✅ Application deployed successfully!"
+            echo "Application deployed successfully!"
             exit 0
           else
-            echo "❌ Attempt $i failed, retrying in 10 seconds..."
+            echo "Attempt $i failed, retrying in 10 seconds..."
             sleep 10
           fi
         done
-        echo "❌ All deployment verification attempts failed"
+        echo "All deployment verification attempts failed"
         exit 1
